@@ -337,64 +337,80 @@ export default function TypewriterExperience({ mood: initialMood, onBack, onMood
     try {
       const canvas = await buildCanvas(false);
       if (!canvas) return;
+      
+      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/png"));
+      if (!blob) return;
+
+      const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.download = `cozy-note-${mood}.png`;
-      a.href = canvas.toDataURL("image/png");
+      a.href = url;
       a.click();
-      showToast("Image downloaded");
+      URL.revokeObjectURL(url);
+      showToast("Note saved to gallery");
+    } catch (e) {
+      console.error(e);
+      showToast("Download failed");
     } finally { setIsDownloading(false); }
   }
 
-  /** Share PNG via Web Share API — triggers Instagram Stories / Files on mobile */
+  /** Share PNG via Web Share API — triggers native share sheet if supported */
   async function shareToInstagram() {
+    if (isDownloading) return;
     setIsDownloading(true);
     try {
-      // Use the full 9:16 card (asSticker = false) for the best fit on Instagram Stories
+      // Generate the canvas with typewriter and quote
       const canvas = await buildCanvas(false);
-      if (!canvas) { alert("Could not generate image."); return; }
+      if (!canvas) {
+        showToast("Export failed");
+        return;
+      }
+
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 1.0));
+      if (!blob) {
+        showToast("Export failed");
+        return;
+      }
+
+      const fileName = `cozy-note-${mood}.png`;
+      const file = new File([blob], fileName, { type: "image/png" });
+
+      // Detect browser capability for file sharing
+      const nav = navigator as any;
+      const canShare = !!(nav.share && nav.canShare && nav.canShare({ files: [file] }));
+
+      if (canShare) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: "Cozy Typewriter",
+            text: "A little note for you. 🕯️",
+          });
+          // showToast is handled by system share success mostly, 
+          // but we can add one for clarity if needed
+          return;
+        } catch (err) {
+          if ((err as Error).name === "AbortError") return;
+          console.error("Sharing failed", err);
+          // Fallback to download if sharing was interrupted or failed
+        }
+      }
+
+      // Fallback: Automatically download and notify user
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
       
-      canvas.toBlob(async (blob) => {
-        if (!blob) return;
-        const file = new File([blob], `cozy-note-${mood}.png`, { type: "image/png" });
-        
-        // 1. Try Web Share API (Primary for mobile)
-        // Note: Sharing ONLY the file (no text/title) is more likely to trigger "Instagram Stories" directly
-        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({ files: [file] });
-            showToast("Opening share menu...");
-            return;
-          } catch (err) {
-            if ((err as Error).name === "AbortError") return;
-          }
-        }
-
-        // 2. Fallback: Copy to Clipboard + Redirect
-        // iOS users can use the "Paste as Sticker" feature in Instagram
-        if (navigator.clipboard && window.ClipboardItem) {
-          try {
-            await navigator.clipboard.write([
-              new ClipboardItem({ [blob.type]: blob })
-            ]);
-            showToast("Note copied! Open Instagram and paste as sticker.");
-            
-            setTimeout(() => {
-              window.location.href = "instagram://camera";
-            }, 1200);
-            return;
-          } catch (err) {
-            console.error("Clipboard failed", err);
-          }
-        }
-
-        // 3. Final Fallback: Download
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = `cozy-note-${mood}.png`;
-        a.click();
-        showToast("Sharing not supported, image saved.");
-      }, "image/png");
-    } finally { setIsDownloading(false); }
+      showToast("Image ready! You can now upload it to Stories.");
+    } catch (e) {
+      console.error(e);
+      showToast("Something went wrong");
+    } finally {
+      setIsDownloading(false);
+    }
   }
 
   function downloadAsTxt() {
@@ -917,22 +933,37 @@ export default function TypewriterExperience({ mood: initialMood, onBack, onMood
         backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 31px, rgba(213,199,166,0.18) 31px, rgba(213,199,166,0.18) 32px)",
         backgroundSize: "100% 32px",
         flexDirection: "column", alignItems: "center", justifyContent: "center",
-        padding: "48px 36px", boxSizing: "border-box", gap: "20px",
+        padding: "40px 30px", boxSizing: "border-box", gap: "20px",
       }}>
-        {/* Decorative */}
-        <div style={{ fontSize: "18px", color: "#C4A97A", letterSpacing: "8px" }}>✦ ✦ ✦</div>
-        {/* Quote paper card */}
-        <div style={{
-          width: "100%", background: "#F2E9D3", border: "1px solid #D5C7A6",
-          borderRadius: "16px", padding: "28px 24px", boxSizing: "border-box",
-          boxShadow: "0 4px 16px rgba(0,0,0,0.05)",
-        }}>
-          <div style={{ fontFamily: "'Courier Prime', monospace", fontSize: "15px", lineHeight: "1.75", letterSpacing: "0.3px", color: "#200B0A", textAlign: "center" }}>
-            {currentQuote}
+        <div style={{ textAlign: "center", width: "100%" }}>
+          <h1 style={{ fontFamily: "Libre Baskerville, serif", fontSize: "32px", color: "#200B0A", margin: "0 0 4px", fontWeight: 700 }}>Your Little Note</h1>
+          <p style={{ fontFamily: "Nunito, sans-serif", fontSize: "14px", color: "#4D3B37", margin: "0 0 12px" }}>A moment of quiet reflection.</p>
+          <div style={{ fontSize: "16px", color: "#C4A97A", letterSpacing: "8px" }}>✦ ✦ ✦</div>
+        </div>
+
+        <div style={{ position: "relative", width: "100%", maxWidth: "320px", filter: "drop-shadow(0px 10px 24px rgba(0,0,0,0.12))", marginTop: "10px" }}>
+          <img src={typewriterScreen} style={{ width: "100%", height: "auto", display: "block" }} />
+          <div style={{
+            position: "absolute", top: "2%", left: "14%", width: "70%", height: "35%",
+            padding: "2px 4px", boxSizing: "border-box", overflow: "hidden"
+          }}>
+            <div style={{ 
+              fontFamily: "'Courier Prime', monospace", 
+              fontSize: "12px", 
+              lineHeight: "1.55", 
+              letterSpacing: "0.2px", 
+              color: "#200B0A", 
+              wordBreak: "break-word", 
+              whiteSpace: "pre-wrap" 
+            }}>
+              {currentQuote}
+            </div>
           </div>
         </div>
-        {/* Footer */}
-        <div style={{ fontFamily: "Nunito, sans-serif", fontSize: "10px", color: "#B8A99E", marginTop: "4px" }}>Written with Cozy Typewriter</div>
+
+        <div style={{ textAlign: "center", marginTop: "30px", width: "100%" }}>
+          <p style={{ fontFamily: "Nunito, sans-serif", fontSize: "12px", color: "#9E8A7E", fontWeight: 500 }}>Written with Cozy Typewriter</p>
+        </div>
       </div>
 
       {/* ── TOAST NOTIFICATION ── */}
