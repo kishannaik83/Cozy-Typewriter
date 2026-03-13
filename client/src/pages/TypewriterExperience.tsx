@@ -373,38 +373,36 @@ export default function TypewriterExperience({ mood: initialMood, onBack, onMood
       }
 
       const fileName = `cozy-note-${mood}.png`;
-      const file = new File([blob], fileName, { type: "image/png" });
-
-      // Detect browser capability for file sharing
-      const nav = navigator as any;
-      const canShare = !!(nav.share && nav.canShare && nav.canShare({ files: [file] }));
-
-      if (canShare) {
-        try {
-          await navigator.share({
-            files: [file],
-            title: "Cozy Typewriter",
-            text: "A little note for you. 🕯️",
-          });
-          // showToast is handled by system share success mostly, 
-          // but we can add one for clarity if needed
-          return;
-        } catch (err) {
-          if ((err as Error).name === "AbortError") return;
-          console.error("Sharing failed", err);
-          // Fallback to download if sharing was interrupted or failed
-        }
-      }
-
-      // Fallback: Automatically download and notify user
       const url = URL.createObjectURL(blob);
+      
+      // 1. Automatically download the PNG
       const a = document.createElement("a");
       a.href = url;
       a.download = fileName;
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
       
-      showToast("Image ready! You can now upload it to Stories.");
+      showToast("Note saved! Opening Instagram...");
+
+      // 2. Attempt to open Instagram app using deep link
+      // 3. Fallback to opening Instagram website if app is unavailable
+      setTimeout(() => {
+        const instagramAppUrl = "instagram://camera";
+        const instagramWebUrl = "https://www.instagram.com/";
+        
+        const start = Date.now();
+        window.location.href = instagramAppUrl;
+
+        // If the browser is still visible after a short delay, fallback to web
+        setTimeout(() => {
+          if (Date.now() - start < 2500 && document.visibilityState === "visible") {
+            window.location.href = instagramWebUrl;
+          }
+          URL.revokeObjectURL(url);
+        }, 2000);
+      }, 800);
+
     } catch (e) {
       console.error(e);
       showToast("Something went wrong");
