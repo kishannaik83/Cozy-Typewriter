@@ -964,44 +964,48 @@ export default function TypewriterExperience({ mood: initialMood, onBack, onMood
         </div>
       )}
 
-      {/* ── Hidden 9:16 card for image export ── */}
+      {/* ── Hidden 9:16 card for image export (Matches user requested format) ── */}
       <div ref={downloadCardRef} style={{
         display: "none", position: "fixed", left: "-9999px", top: "0",
         width: "360px", height: "640px",
         backgroundColor: "#FFFAEB",
-        backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 31px, rgba(213,199,166,0.18) 31px, rgba(213,199,166,0.18) 32px)",
-        backgroundSize: "100% 32px",
         flexDirection: "column", alignItems: "center", justifyContent: "center",
-        padding: "40px 30px", boxSizing: "border-box", gap: "20px",
+        padding: "40px 24px", boxSizing: "border-box", gap: "28px",
       }}>
-        <div style={{ textAlign: "center", width: "100%" }}>
-          <h1 style={{ fontFamily: "Libre Baskerville, serif", fontSize: "32px", color: "#200B0A", margin: "0 0 4px", fontWeight: 700 }}>Your Little Note</h1>
-          <p style={{ fontFamily: "Nunito, sans-serif", fontSize: "14px", color: "#4D3B37", margin: "0 0 12px" }}>A moment of quiet reflection.</p>
-          <div style={{ fontSize: "16px", color: "#C4A97A", letterSpacing: "8px" }}>✦ ✦ ✦</div>
-        </div>
+        {/* Decorative diamonds */}
+        <div style={{ fontSize: "24px", color: "#C4A97A", letterSpacing: "16px", lineHeight: 1, marginBottom: "-5px" }}>✦ ✦ ✦</div>
 
-        <div style={{ position: "relative", width: "100%", maxWidth: "320px", filter: "drop-shadow(0px 10px 24px rgba(0,0,0,0.12))", marginTop: "10px" }}>
-          <img src={typewriterScreen} style={{ width: "100%", height: "auto", display: "block" }} />
-          <div style={{
-            position: "absolute", top: "2%", left: "14%", width: "70%", height: "35%",
-            padding: "2px 4px", boxSizing: "border-box", overflow: "hidden"
+        {/* The Quote Box */}
+        <div style={{
+          width: "100%",
+          backgroundColor: "#F9F2E0", // Slightly darker parchment feel
+          borderRadius: "28px", 
+          border: "1px solid #D5C7A6",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          padding: "48px 32px", boxSizing: "border-box", textAlign: "center",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.03)"
+        }}>
+          <div style={{ 
+            fontFamily: "'Courier Prime', monospace", 
+            fontSize: "18px", 
+            lineHeight: "1.7", 
+            color: "#200B0A", 
+            wordBreak: "break-word", 
+            whiteSpace: "pre-wrap" 
           }}>
-            <div style={{ 
-              fontFamily: "'Courier Prime', monospace", 
-              fontSize: "12px", 
-              lineHeight: "1.55", 
-              letterSpacing: "0.2px", 
-              color: "#200B0A", 
-              wordBreak: "break-word", 
-              whiteSpace: "pre-wrap" 
-            }}>
-              {currentQuote}
-            </div>
+            {currentQuote}
           </div>
         </div>
 
-        <div style={{ textAlign: "center", marginTop: "30px", width: "100%" }}>
-          <p style={{ fontFamily: "Nunito, sans-serif", fontSize: "12px", color: "#9E8A7E", fontWeight: 500 }}>Written with Cozy Typewriter</p>
+        {/* Subtle Watermark */}
+        <div style={{ 
+          fontFamily: "Nunito, sans-serif", 
+          fontSize: "12px", 
+          color: "#B8A99E",
+          opacity: 0.8,
+          letterSpacing: "0.2px"
+        }}>
+          Written with Cozy Typewriter
         </div>
       </div>
 
