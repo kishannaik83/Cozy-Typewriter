@@ -194,6 +194,7 @@ export default function TypewriterExperience({ mood: initialMood, onBack, onMood
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isMoodModalOpen, setIsMoodModalOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadComplete, setDownloadComplete] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: "", visible: false });
 
@@ -331,6 +332,17 @@ export default function TypewriterExperience({ mood: initialMood, onBack, onMood
     }
   }
 
+  function triggerDownload(blob: Blob, fileName: string) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
   async function downloadAsImage() {
     if (isDownloading) return;
     setIsDownloading(true);
@@ -341,12 +353,7 @@ export default function TypewriterExperience({ mood: initialMood, onBack, onMood
       const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/png"));
       if (!blob) return;
 
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.download = `cozy-note-${mood}.png`;
-      a.href = url;
-      a.click();
-      URL.revokeObjectURL(url);
+      triggerDownload(blob, `cozy-note-${mood}.png`);
       showToast("Note saved to gallery");
     } catch (e) {
       console.error(e);
@@ -354,7 +361,7 @@ export default function TypewriterExperience({ mood: initialMood, onBack, onMood
     } finally { setIsDownloading(false); }
   }
 
-  /** Share PNG via Web Share API — triggers native share sheet if supported */
+  /** Share PNG via Web Share API or fallback to download + manual open */
   async function shareToInstagram() {
     if (isDownloading) return;
     setIsDownloading(true);
@@ -373,36 +380,31 @@ export default function TypewriterExperience({ mood: initialMood, onBack, onMood
       }
 
       const fileName = `cozy-note-${mood}.png`;
-      const url = URL.createObjectURL(blob);
-      
-      // 1. Automatically download the PNG
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      
-      showToast("Note saved! Opening Instagram...");
+      const file = new File([blob], fileName, { type: "image/png" });
 
-      // 2. Attempt to open Instagram app using deep link
-      // 3. Fallback to opening Instagram website if app is unavailable
-      setTimeout(() => {
-        const instagramAppUrl = "instagram://camera";
-        const instagramWebUrl = "https://www.instagram.com/";
-        
-        const start = Date.now();
-        window.location.href = instagramAppUrl;
-
-        // If the browser is still visible after a short delay, fallback to web
-        setTimeout(() => {
-          if (Date.now() - start < 2500 && document.visibilityState === "visible") {
-            window.location.href = instagramWebUrl;
+      // Try to use Web Share API if supported for files
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: "Cozy Typewriter Note",
+            text: `"${currentQuote}" — Shared from Cozy Typewriter`,
+          });
+          // Show "Open Instagram" button as a helpful shortcut anyway
+          setDownloadComplete(true);
+        } catch (err) {
+          // If aborted, user just closed the sheet; if other error, fallback to download
+          if ((err as Error).name !== "AbortError") {
+            triggerDownload(blob, fileName);
+            setDownloadComplete(true);
           }
-          URL.revokeObjectURL(url);
-        }, 2000);
-      }, 800);
-
+        }
+      } else {
+        // Fallback for browsers that don't support file sharing (e.g., most desktop, old mobile)
+        triggerDownload(blob, fileName);
+        showToast("Note saved! Opening Instagram...");
+        setDownloadComplete(true);
+      }
     } catch (e) {
       console.error(e);
       showToast("Something went wrong");
@@ -410,6 +412,23 @@ export default function TypewriterExperience({ mood: initialMood, onBack, onMood
       setIsDownloading(false);
     }
   }
+
+  const openInstagram = () => {
+    // Attempt to open Instagram app using deep link
+    // Fallback to opening Instagram website if app is unavailable
+    const instagramAppUrl = "instagram://camera";
+    const instagramWebUrl = "https://www.instagram.com/";
+    
+    const start = Date.now();
+    window.location.href = instagramAppUrl;
+
+    // If the browser is still visible after a short delay, fallback to web
+    setTimeout(() => {
+      if (Date.now() - start < 2500 && document.visibilityState === "visible") {
+        window.location.href = instagramWebUrl;
+      }
+    }, 2000);
+  };
 
   function downloadAsTxt() {
     const a = document.createElement("a");
@@ -826,7 +845,12 @@ export default function TypewriterExperience({ mood: initialMood, onBack, onMood
       {/* ── SAVE MODAL ── */}
       {isShareOpen && (
         <div
-          onClick={e => { if (e.target === e.currentTarget) setIsShareOpen(false); }}
+          onClick={e => { 
+            if (e.target === e.currentTarget) {
+              setIsShareOpen(false);
+              setDownloadComplete(false);
+            }
+          }}
           style={{
             position: "fixed", inset: 0, backgroundColor: "rgba(32,11,10,0.45)",
             backdropFilter: "blur(6px)", display: "flex", alignItems: "center",
@@ -843,7 +867,10 @@ export default function TypewriterExperience({ mood: initialMood, onBack, onMood
           }}>
             {/* Close */}
             <button
-              onClick={() => setIsShareOpen(false)}
+              onClick={() => {
+                setIsShareOpen(false);
+                setDownloadComplete(false);
+              }}
               style={{ position: "absolute", top: "20px", right: "20px", background: "transparent", border: "none", cursor: "pointer", color: "#9E8A7E", padding: "4px", borderRadius: "50%", transition: "background 0.15s", lineHeight: 0 }}
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(213,199,166,0.4)"; }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
@@ -883,19 +910,33 @@ export default function TypewriterExperience({ mood: initialMood, onBack, onMood
             {/* ── Buttons ── */}
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
 
-              {/* Share to Stories — full width */}
-              <button
-                onClick={shareToInstagram}
-                disabled={isDownloading}
-                style={{ ...modalBtn(), justifyContent: "center", height: "48px", width: "100%", opacity: isDownloading ? 0.6 : 1 }}
-                onMouseEnter={e => hover(e, true)}
-                onMouseLeave={e => hover(e, false)}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, width: "16px", height: "16px" }}>
-                  <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><circle cx="12" cy="12" r="4.5"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/>
-                </svg>
-                {isDownloading ? "Preparing…" : "Share to Stories"}
-              </button>
+              {/* Share to Stories / Open Instagram — full width */}
+              {downloadComplete ? (
+                <button
+                  onClick={openInstagram}
+                  style={{ ...modalBtn(), justifyContent: "center", height: "48px", width: "100%" }}
+                  onMouseEnter={e => hover(e, true)}
+                  onMouseLeave={e => hover(e, false)}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, width: "16px", height: "16px" }}>
+                    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><circle cx="12" cy="12" r="4.5"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/>
+                  </svg>
+                  Open Instagram
+                </button>
+              ) : (
+                <button
+                  onClick={shareToInstagram}
+                  disabled={isDownloading}
+                  style={{ ...modalBtn(), justifyContent: "center", height: "48px", width: "100%", opacity: isDownloading ? 0.6 : 1 }}
+                  onMouseEnter={e => hover(e, true)}
+                  onMouseLeave={e => hover(e, false)}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, width: "16px", height: "16px" }}>
+                    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><circle cx="12" cy="12" r="4.5"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/>
+                  </svg>
+                  {isDownloading ? "Preparing…" : "Share to Stories"}
+                </button>
+              )}
 
               {/* WhatsApp + X */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
